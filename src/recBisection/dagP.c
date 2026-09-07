@@ -43,6 +43,10 @@ int dagP_read_graph(char* file_name, dgraph *G, const MLGP_option *opt) {
     return 0;
 }
 ecType dagP_partition_from_dgraph(dgraph* G, const MLGP_option *opt, idxType* parts) {
+    if (opt->nbPart < 1 || opt->runs < 1)
+        u_errexit("dagP_partition_from_dgraph: parts and runs must be positive\n");
+    if (opt->obj != CO_OBJ_EC && opt->obj != CO_OBJ_CV)
+        u_errexit("obj must be 0 (edge cut) or 1 (communication volume)\n");
     set_dgraph_info(G);
 
     int maxindegree, minindegree, maxoutdegree, minoutdegree;
@@ -65,13 +69,9 @@ ecType dagP_partition_from_dgraph(dgraph* G, const MLGP_option *opt, idxType* pa
         }
     }
 
-    ecType * edgecut = (ecType *) malloc(sizeof(ecType) * opt->runs);
-    ecType bestEdgecut = ecType_MAX;
-    int* nbcomm = (int*) malloc(sizeof(int) * opt->runs);
-    double* latencies = (double*) malloc(sizeof(double) * opt->runs);
+    ecType bestObjective = ecType_MAX;
     int r;
     rcoarsen * rcoars;
-    idxType nbcomp = 0;
 
     if(opt->seed == 0) {
         usRandom((int) time(NULL));
@@ -80,18 +80,16 @@ ecType dagP_partition_from_dgraph(dgraph* G, const MLGP_option *opt, idxType* pa
         usRandom(opt->seed);
 
     for (r = 0; r<opt->runs; r++) {
-        int isAcyclic;
         rMLGP_info* info = (rMLGP_info*)  malloc (sizeof (rMLGP_info));
         initRInfoPart(info);
         rcoars = rVCycle(G, *opt, info);
-        edgecut[r] = opt->obj == CO_OBJ_CV
+        ecType objective = opt->obj == CO_OBJ_CV
             ? volume(G, rcoars->coars->part, opt->nbPart)
             : edgeCut(G, rcoars->coars->part);
-        int maxsize = printPartWeights(G, rcoars->coars->part);
-        // printf("Partition:\n\tEdgecut: %d\n\tBalance: %f\n\tVCycle depth: %d\n\tVertex Contraction: %.3f\n\tEdge Contraction: %.3f\n\tEdge Weight Contraction: %.3f\nTimes in seconds:\n\tCoarsening: %.3lf\n\tInitial Partition: %.3lf\n\tUncoarsening: %.3lf\n\tTotal: %.3lf\n", (int) edgecut[r], (double) maxsize / (G->totvw/opt->nbPart), info->info->coars_depth, (double) info->info->nbnodes_coars_tab[info->info->coars_depth] / (double) G->nVrtx, (double) info->info->nbedges_coars_tab[info->info->coars_depth] / (double) G->nEdge,  (double) ((double) (int) info->info->coarse_ew/ (double) G->nEdge),  info->timing_coars, info->timing_inipart, info->timing_uncoars,info->timing_global);
+        printPartWeights(G, rcoars->coars->part);
 
-        if (edgecut[r] < bestEdgecut) {
-            bestEdgecut = edgecut[r];
+        if (r == 0 || objective < bestObjective) {
+            bestObjective = objective;
             for (i=1; i <= G->nVrtx; ++i) {
                 parts[i] = rcoars->coars->part[i];
             }
@@ -107,10 +105,7 @@ ecType dagP_partition_from_dgraph(dgraph* G, const MLGP_option *opt, idxType* pa
         freeRInfoPart(info);
     }
 
-    free(edgecut);
-    free(nbcomm);
-    free(latencies);
-    return bestEdgecut;
+    return bestObjective;
 }
 int dagP_free_graph(dgraph* G) {
     freeDGraphData(G);

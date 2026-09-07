@@ -102,6 +102,11 @@ represent this objective. The final search preserves the starting quotient's
 topological order and accepts strictly improving moves. It respects balance
 bounds for feasible seeds and never worsens a seed's existing bound violations.
 This is a local-search heuristic, not a guarantee of a global minimum.
+Volume scoring uses O(vertices + edges + partitions) time and O(partitions)
+workspace. Refinement recomputes only the contributions of a moved producer
+and its predecessors, visiting their outgoing edges rather than all partitions
+for each contribution. Candidate enumeration still considers all destination
+partitions, so large part counts can make refinement expensive.
 
 For the volume phase, `--refinement 1` and `2` use single-vertex moves,
 `3` uses pair swaps, and `4` uses both. Swaps can improve partitions when
@@ -109,8 +114,10 @@ exact balance prevents single moves, but examine quadratically many vertex
 pairs and can be expensive on large graphs. `--refinement 0` disables
 refinement; `--ref_step` limits the number of volume passes (default ten).
 
-Both objective modes report communication volume for each run and its mean and
-standard deviation, alongside edge cut, and identify the optimized objective.
+Both objective modes report edge cut and communication volume for each run,
+with their means and population standard deviations, and identify the optimized
+objective. Per-run costs retain the full 64-bit `ecType` range; summary values
+are printed to three decimal places. `--runs` must be positive.
 Detailed multilevel diagnostics still
 describe the edge-cut starting partition. With the API, set `opt.obj = 1`;
 `dagP_partition_from_dgraph` returns the best selected objective across

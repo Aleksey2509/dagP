@@ -24,8 +24,24 @@ int processArgs_rMLGP(int argc, char **argv, MLGP_option* opt)
 }
 
 
+/* Population statistics without overflowing the integer sum of run costs. */
+static void printObjectiveStatistics(const char *label, const ecType *values, int count)
+{
+    long double mean = 0, variance = 0;
+    for (int r = 0; r < count; ++r)
+        mean += (long double)values[r] / count;
+    for (int r = 0; r < count; ++r) {
+        long double delta = (long double)values[r] - mean;
+        variance += delta * delta / count;
+    }
+    printf("%s%.3Lf\tStandard Deviation: %.3Lf\n", label, mean, sqrtl(variance));
+}
+
+
 void run_rMLGP(char* file_name, const MLGP_option opt)
 {
+    if (opt.runs < 1)
+        u_errexit("--runs must be positive\n");
     dgraph G;
     double graphRead =- u_wseconds();
     readDGraph(&G, file_name, opt.use_binary_input);
@@ -60,10 +76,8 @@ void run_rMLGP(char* file_name, const MLGP_option opt)
     printf("Graph Information:\n\tNb node: %d\n\tNb Edges: %d\n\tMax in-degree: %d\n\tMax out-degree: %d\n\tAv. in-degree: %.2f\n\tAv. out-degree: %.2f\nProblem Information:\n\tNb part: %d\n\tLower Bound[0]: %.1f\n\tUpper Bound[0]: %.1f\n\n", G.nVrtx, G.nEdge, maxindegree, maxoutdegree,aveindegree,aveoutdegree,opt.nbPart, opt.lb[0], opt.ub[0]);
     ecType * edgecut = (ecType *) malloc(sizeof(ecType) * opt.runs);
     ecType* commvol = (ecType*) umalloc(sizeof(ecType) * opt.runs, "communication volumes");
-    double* latencies = (double*) malloc(sizeof(double) * opt.runs);
     int r;
     rcoarsen * rcoars;
-    idxType nbcomp = 0;
 
     if(opt.seed == 0) {
         usRandom((int) time(NULL));
@@ -86,7 +100,7 @@ void run_rMLGP(char* file_name, const MLGP_option opt)
                (long long)commvol[r]);
 
         int maxsize = printPartWeights(&G, rcoars->coars->part);
-        printf("Partition:\n\tEdgecut: %d\n\tBalance: %f\n\tVCycle depth: %d\n\tVertex Contraction: %.3f\n\tEdge Contraction: %.3f\n\tEdge Weight Contraction: %.3f\nTimes in seconds:\n\tCoarsening: %.3lf\n\tInitial Partition: %.3lf\n\tUncoarsening: %.3lf\n\tTotal: %.3lf\n", (int) edgecut[r], (double) maxsize / (G.totvw/opt.nbPart), info->info->coars_depth, (double) info->info->nbnodes_coars_tab[info->info->coars_depth] / (double) G.nVrtx, (double) info->info->nbedges_coars_tab[info->info->coars_depth] / (double) G.nEdge,  (double) ((double) (int) info->info->coarse_ew/ (double) G.nEdge),  info->timing_coars, info->timing_inipart, info->timing_uncoars,info->timing_global);
+        printf("Partition:\n\tEdgecut: %lld\n\tBalance: %f\n\tVCycle depth: %d\n\tVertex Contraction: %.3f\n\tEdge Contraction: %.3f\n\tEdge Weight Contraction: %.3f\nTimes in seconds:\n\tCoarsening: %.3lf\n\tInitial Partition: %.3lf\n\tUncoarsening: %.3lf\n\tTotal: %.3lf\n", (long long) edgecut[r], (double) maxsize / (G.totvw/opt.nbPart), info->info->coars_depth, (double) info->info->nbnodes_coars_tab[info->info->coars_depth] / (double) G.nVrtx, (double) info->info->nbedges_coars_tab[info->info->coars_depth] / (double) G.nEdge,  (double) ((double) (int) info->info->coarse_ew/ (double) G.nEdge),  info->timing_coars, info->timing_inipart, info->timing_uncoars,info->timing_global);
 
 
         if (opt.debug) {
@@ -122,26 +136,11 @@ void run_rMLGP(char* file_name, const MLGP_option opt)
         freeRInfoPart(info);
     }
 
-    ecType edgecutave = 0.0, edgecutsd = 0.0;
-    for (r = 0; r<opt.runs; r++) {
-        edgecutave += edgecut[r];
-    }
-    edgecutave = edgecutave / opt.runs;
-    for (r = 0; r<opt.runs; r++) {
-        edgecutsd = (edgecut[r] - edgecutave) < 0 ? edgecutave - edgecut[r] : edgecut[r] - edgecutave;
-    }
-    edgecutsd = edgecutsd / opt.runs;
-    printf("Average Edgecut:%d\tStandard Deviation: %d\n", (int) edgecutave, (int) edgecutsd);
-    double mean = 0, variance = 0;
-    for (r = 0; r < opt.runs; ++r)
-        mean += (double)commvol[r] / opt.runs;
-    for (r = 0; r < opt.runs; ++r)
-        variance += ((double)commvol[r] - mean) * ((double)commvol[r] - mean) / opt.runs;
-    printf("Average Communication volume: %.3f\tStandard Deviation: %.3f\n", mean, sqrt(variance));
+    printObjectiveStatistics("Average Edgecut:", edgecut, opt.runs);
+    printObjectiveStatistics("Average Communication volume: ", commvol, opt.runs);
 
     free(edgecut);
     free(commvol);
-    free(latencies);
     freeDGraphData(&G);
 }
 

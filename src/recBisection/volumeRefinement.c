@@ -14,19 +14,20 @@ typedef struct {
 } volumeWork;
 
 static ecType sourceVolume(dgraph *G, idxType *part, idxType v,
-                           idxType k, ecType *scratch)
+                           ecType *scratch)
 {
     ecType cost = 0;
-    memset(scratch, 0, k * sizeof(ecType));
     for (idxType e = G->outStart[v]; e <= G->outEnd[v]; ++e) {
         idxType p = part[G->out[e]];
         ecType weight = (G->frmt & DG_FRMT_EC) ? G->ecOut[e] : 1;
         if (p != part[v] && weight > scratch[p]) {
+            cost += weight - scratch[p];
             scratch[p] = weight;
         }
     }
-    for (idxType p = 0; p < k; ++p)
-        cost += scratch[p];
+    /* Leave scratch zeroed for the next source without scanning all parts. */
+    for (idxType e = G->outStart[v]; e <= G->outEnd[v]; ++e)
+        scratch[part[G->out[e]]] = 0;
     return cost;
 }
 
@@ -128,14 +129,14 @@ static ecType tryMove(dgraph *G, idxType *part, const MLGP_option *opt,
     for (idxType i = 0; i < count; ++i) {
         idxType source = work->affected[i];
         gain += work->cost[source] -
-            sourceVolume(G, part, source, opt->nbPart, work->scratch);
+            sourceVolume(G, part, source, work->scratch);
     }
     if (gain > 0) {
         work->size[origin] = from;
         work->size[dest] = to;
         for (idxType i = 0; i < count; ++i) {
             idxType source = work->affected[i];
-            work->cost[source] = sourceVolume(G, part, source, opt->nbPart, work->scratch);
+            work->cost[source] = sourceVolume(G, part, source, work->scratch);
         }
     }
     else {
@@ -155,6 +156,8 @@ ecType refineVolume(dgraph *G, idxType *part, const MLGP_option *opt)
     idxType n = G->nVrtx, k = opt->nbPart;
     if (k < 1)
         u_errexit("refineVolume: number of partitions must be positive\n");
+    if (opt->refinement < REF_NONE || opt->refinement > REF_KL_bFM_MAXW)
+        u_errexit("refineVolume: unsupported refinement method\n");
     work.cost = (ecType*) calloc(n + 1, sizeof(ecType));
     work.scratch = (ecType*) calloc(k, sizeof(ecType));
     work.affected = (idxType*) malloc((n + 1) * sizeof(idxType));
@@ -172,7 +175,7 @@ ecType refineVolume(dgraph *G, idxType *part, const MLGP_option *opt)
     }
     partitionOrder(G, part, k, work.rank);
     for (idxType v = 1; v <= n; ++v) {
-        work.cost[v] = sourceVolume(G, part, v, k, work.scratch);
+        work.cost[v] = sourceVolume(G, part, v, work.scratch);
         score += work.cost[v];
     }
     for (int pass = 0; opt->refinement != REF_NONE && pass < opt->ref_step; ++pass) {

@@ -1317,21 +1317,28 @@ ecType edgeCut(dgraph* G, idxType* part)
 ecType volume(dgraph* G, idxType* part, idxType nbPart)
 {
     ecType vol = 0;
+    if (nbPart < 1)
+        u_errexit("volume: number of partitions must be positive\n");
+    for (idxType v = 1; v <= G->nVrtx; ++v)
+        if (part[v] < 0 || part[v] >= nbPart)
+            u_errexit("volume: invalid partition id\n");
     ecType* topart = (ecType*) calloc(nbPart, sizeof(ecType));
     if (!topart)
         u_errexit("volume: allocation failed\n");
     for (idxType i = 1; i <= G->nVrtx; ++i) {
-        memset(topart, 0, nbPart * sizeof(ecType));
         /* Find the maximum crossing-edge weight for each destination part. */
         for (idxType j = G->outStart[i]; j <= G->outEnd[i]; ++j) {
             idxType dest = part[G->out[j]];
             ecType weight = (G->frmt & DG_FRMT_EC) ? G->ecOut[j] : 1;
             if (dest != part[i] && weight > topart[dest]) {
+                vol += weight - topart[dest];
                 topart[dest] = weight;
             }
         }
-        for (idxType dest = 0; dest < nbPart; ++dest)
-            vol += topart[dest];
+        /* Reset only destinations visited by this producer: O(n + m + k),
+         * rather than O(n * k), including for edge-cut-only CLI reporting. */
+        for (idxType j = G->outStart[i]; j <= G->outEnd[i]; ++j)
+            topart[part[G->out[j]]] = 0;
     }
     free(topart);
     return vol;
