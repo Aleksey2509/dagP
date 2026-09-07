@@ -75,6 +75,47 @@ Citation for the Scheduler (BibTeX):
     ./exe/rMLGP 2mm_10_20_30_40.dot 4 --print 1 --ratio 1.1
 
 
+## PARTITIONING OBJECTIVE
+
+Use `--obj 0` (the default) to minimize edge cut, or `--obj 1` to
+minimize communication volume. Other values are rejected.
+
+Edge cut sums the weights of all edges crossing partition boundaries.
+Communication volume groups outgoing crossing edges by **source vertex and
+destination partition**, and sums the maximum edge weight in each group.
+For unweighted graphs each group costs one. For example, a producer with ten
+consumers in one remote partition and four in another contributes fourteen
+to unweighted edge cut but only two to volume. Vertex weights affect balance,
+not communication cost. The weighted definition assumes a single transfer of
+the largest required payload can serve all consumers in that destination.
+
+```sh
+./exe/rMLGP data/2mm_10_20_30_40.dot 4 --obj 1 --seed 17 --ratio 1.1
+scons test
+```
+
+Volume mode uses the existing multilevel edge-cut algorithm to generate a
+starting partition, then performs exact volume refinement on the original
+graph across all final partitions. Existing contractions and recursive split
+scores do not preserve producer identities and therefore cannot directly
+represent this objective. The final search preserves the starting quotient's
+topological order and accepts strictly improving moves. It respects balance
+bounds for feasible seeds and never worsens a seed's existing bound violations.
+This is a local-search heuristic, not a guarantee of a global minimum.
+
+For the volume phase, `--refinement 1` and `2` use single-vertex moves,
+`3` uses pair swaps, and `4` uses both. Swaps can improve partitions when
+exact balance prevents single moves, but examine quadratically many vertex
+pairs and can be expensive on large graphs. `--refinement 0` disables
+refinement; `--ref_step` limits the number of volume passes (default ten).
+
+Both objective modes report communication volume for each run and its mean and
+standard deviation, alongside edge cut, and identify the optimized objective.
+Detailed multilevel diagnostics still
+describe the edge-cut starting partition. With the API, set `opt.obj = 1`;
+`dagP_partition_from_dgraph` returns the best selected objective across
+`opt.runs` and writes the corresponding assignment to `parts`.
+
 ## GRAPH FORMAT
 
 The application accepts a number of different formats:
@@ -122,7 +163,8 @@ Fourth function reads a directed graph from a file
 
  - If there is a binary version of the input file and the `use_binary_input` option `true`, then the partitioner will give priority to binary version of the input file.
 
-Fifth function runs the partitioning algorithm on the given graph with the given options, then writes the number of partition assignment of the nodes to the `parts` array.
+Fifth function runs the partitioning algorithm, returns the best selected objective
+(edge cut or communication volume), and writes its node assignments to `parts`.
 
 Last two functions free the respective variables.
 

@@ -84,7 +84,9 @@ ecType dagP_partition_from_dgraph(dgraph* G, const MLGP_option *opt, idxType* pa
         rMLGP_info* info = (rMLGP_info*)  malloc (sizeof (rMLGP_info));
         initRInfoPart(info);
         rcoars = rVCycle(G, *opt, info);
-        edgecut[r] = edgeCut(G, rcoars->coars->part);
+        edgecut[r] = opt->obj == CO_OBJ_CV
+            ? volume(G, rcoars->coars->part, opt->nbPart)
+            : edgeCut(G, rcoars->coars->part);
         int maxsize = printPartWeights(G, rcoars->coars->part);
         // printf("Partition:\n\tEdgecut: %d\n\tBalance: %f\n\tVCycle depth: %d\n\tVertex Contraction: %.3f\n\tEdge Contraction: %.3f\n\tEdge Weight Contraction: %.3f\nTimes in seconds:\n\tCoarsening: %.3lf\n\tInitial Partition: %.3lf\n\tUncoarsening: %.3lf\n\tTotal: %.3lf\n", (int) edgecut[r], (double) maxsize / (G->totvw/opt->nbPart), info->info->coars_depth, (double) info->info->nbnodes_coars_tab[info->info->coars_depth] / (double) G->nVrtx, (double) info->info->nbedges_coars_tab[info->info->coars_depth] / (double) G->nEdge,  (double) ((double) (int) info->info->coarse_ew/ (double) G->nEdge),  info->timing_coars, info->timing_inipart, info->timing_uncoars,info->timing_global);
 

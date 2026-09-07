@@ -59,7 +59,7 @@ void run_rMLGP(char* file_name, const MLGP_option opt)
 
     printf("Graph Information:\n\tNb node: %d\n\tNb Edges: %d\n\tMax in-degree: %d\n\tMax out-degree: %d\n\tAv. in-degree: %.2f\n\tAv. out-degree: %.2f\nProblem Information:\n\tNb part: %d\n\tLower Bound[0]: %.1f\n\tUpper Bound[0]: %.1f\n\n", G.nVrtx, G.nEdge, maxindegree, maxoutdegree,aveindegree,aveoutdegree,opt.nbPart, opt.lb[0], opt.ub[0]);
     ecType * edgecut = (ecType *) malloc(sizeof(ecType) * opt.runs);
-    int* nbcomm = (int*) malloc(sizeof(int) * opt.runs);
+    ecType* commvol = (ecType*) umalloc(sizeof(ecType) * opt.runs, "communication volumes");
     double* latencies = (double*) malloc(sizeof(double) * opt.runs);
     int r;
     rcoarsen * rcoars;
@@ -80,6 +80,10 @@ void run_rMLGP(char* file_name, const MLGP_option opt)
         rcoars = rVCycle(&G, opt, info);
 
         edgecut[r] = edgeCut(&G, rcoars->coars->part);
+        commvol[r] = volume(&G, rcoars->coars->part, opt.nbPart);
+        printf("Objective: %s\nCommunication volume: %lld\n",
+               opt.obj == CO_OBJ_CV ? "communication volume" : "edge cut",
+               (long long)commvol[r]);
 
         int maxsize = printPartWeights(&G, rcoars->coars->part);
         printf("Partition:\n\tEdgecut: %d\n\tBalance: %f\n\tVCycle depth: %d\n\tVertex Contraction: %.3f\n\tEdge Contraction: %.3f\n\tEdge Weight Contraction: %.3f\nTimes in seconds:\n\tCoarsening: %.3lf\n\tInitial Partition: %.3lf\n\tUncoarsening: %.3lf\n\tTotal: %.3lf\n", (int) edgecut[r], (double) maxsize / (G.totvw/opt.nbPart), info->info->coars_depth, (double) info->info->nbnodes_coars_tab[info->info->coars_depth] / (double) G.nVrtx, (double) info->info->nbedges_coars_tab[info->info->coars_depth] / (double) G.nEdge,  (double) ((double) (int) info->info->coarse_ew/ (double) G.nEdge),  info->timing_coars, info->timing_inipart, info->timing_uncoars,info->timing_global);
@@ -118,23 +122,25 @@ void run_rMLGP(char* file_name, const MLGP_option opt)
         freeRInfoPart(info);
     }
 
-    ecType edgecutave = 0.0, nbcommave = 0.0, edgecutsd = 0.0, nbcommsd = 0.0;
+    ecType edgecutave = 0.0, edgecutsd = 0.0;
     for (r = 0; r<opt.runs; r++) {
         edgecutave += edgecut[r];
-        nbcommave += nbcomm[r];
     }
     edgecutave = edgecutave / opt.runs;
-    nbcommave = nbcommave / opt.runs;
     for (r = 0; r<opt.runs; r++) {
         edgecutsd = (edgecut[r] - edgecutave) < 0 ? edgecutave - edgecut[r] : edgecut[r] - edgecutave;
-        nbcommsd = (nbcomm[r] - nbcommave) < 0 ? nbcommave - nbcomm[r] : nbcomm[r] - nbcommave;
     }
     edgecutsd = edgecutsd / opt.runs;
-    nbcommsd = nbcommsd / opt.runs;
     printf("Average Edgecut:%d\tStandard Deviation: %d\n", (int) edgecutave, (int) edgecutsd);
+    double mean = 0, variance = 0;
+    for (r = 0; r < opt.runs; ++r)
+        mean += (double)commvol[r] / opt.runs;
+    for (r = 0; r < opt.runs; ++r)
+        variance += ((double)commvol[r] - mean) * ((double)commvol[r] - mean) / opt.runs;
+    printf("Average Communication volume: %.3f\tStandard Deviation: %.3f\n", mean, sqrt(variance));
 
     free(edgecut);
-    free(nbcomm);
+    free(commvol);
     free(latencies);
     freeDGraphData(&G);
 }

@@ -1316,29 +1316,24 @@ ecType edgeCut(dgraph* G, idxType* part)
 }
 ecType volume(dgraph* G, idxType* part, idxType nbPart)
 {
-    ecType vol = 0.0;
-    ecType** topart = (ecType**) calloc((G->nVrtx+1),sizeof(ecType*));
-    ecType i, j, neigh;
-    for (i=0; i <= G->nVrtx; ++i)
-        topart[i] = (ecType*) calloc((nbPart), sizeof(ecType));
-    for (i=1; i <= G->nVrtx; ++i) {
-        for (j = G->outStart[i]; j <= G->outEnd[i]; ++j) {
-            neigh = G->out[j];
-            if (part[i] != part[neigh]) {
-                if (topart[i][part[neigh]] == 0) {
-                    if (G->frmt & DG_FRMT_EC)
-                        topart[i][part[neigh]] = G->ecOut[j];
-                    else
-                        ++topart[i][part[neigh]];
-                }
+    ecType vol = 0;
+    ecType* topart = (ecType*) calloc(nbPart, sizeof(ecType));
+    if (!topart)
+        u_errexit("volume: allocation failed\n");
+    for (idxType i = 1; i <= G->nVrtx; ++i) {
+        memset(topart, 0, nbPart * sizeof(ecType));
+        /* Find the maximum crossing-edge weight for each destination part. */
+        for (idxType j = G->outStart[i]; j <= G->outEnd[i]; ++j) {
+            idxType dest = part[G->out[j]];
+            ecType weight = (G->frmt & DG_FRMT_EC) ? G->ecOut[j] : 1;
+            if (dest != part[i] && weight > topart[dest]) {
+                topart[dest] = weight;
             }
         }
+        for (idxType dest = 0; dest < nbPart; ++dest)
+            vol += topart[dest];
     }
-    for (i=1; i <= G->nVrtx; ++i) {
-        for (j=0; j < nbPart; ++j) {
-            vol += topart[i][j];
-        }
-    }
+    free(topart);
     return vol;
 }
 
@@ -1424,4 +1419,3 @@ idxType nbPart(dgraph* G, idxType* part, vwType* partsize)
             partsize[part[i]]++;
     return nbpart;
 }
-

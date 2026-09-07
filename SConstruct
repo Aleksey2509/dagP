@@ -251,7 +251,7 @@ dgraphlibsrcs = Split("""common/dgraph.c common/dgraphTraversal.c
   common/dgraphReader.c common/dgraphDotReader.cpp
   recBisection/vcycle2way.c recBisection/initialBisection.c
   recBisection/rvcycle.c recBisection/dgraphBisection.c recBisection/refinementBis.c
-  recBisection/dagP.c""")
+  recBisection/dagP.c recBisection/volumeRefinement.c""")
 
 dgraphlibsrcs = [os.path.join('#/src', x) for x in dgraphlibsrcs]
 
@@ -276,5 +276,10 @@ env.Alias('tools', [ginfo])
 env.Default(rmlgp, ginfo)
 
 env.Alias('all', ['dagplib', 'rMLGP', 'tools'])
+
+objective_test = env.Program('exe/test_objective', 'tests/test_objective.c')
+test_alias = env.Alias('test', [objective_test, rmlgp],
+    ['./exe/test_objective', 'python3 tests/test_objective_cli.py'])
+AlwaysBuild(test_alias)
 
 env.SConsignFile()

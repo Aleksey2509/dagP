@@ -115,7 +115,8 @@ void randomizeWeights(dgraph *G, vwType vmin, vwType vmax, ecType emin, ecType e
 void applyCCR(dgraph *G, double CCR);
 
 idxType nbPart(dgraph* G, idxType* part, vwType* partsize);
+/* Sum maximum crossing-edge weight per producer/destination part (one for
+ * unweighted graphs). Part ids must be in [0, nbPart). */
 ecType volume(dgraph* G, idxType* part, idxType nbPart);
 
 #endif
-

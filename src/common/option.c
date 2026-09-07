@@ -385,7 +385,8 @@ void printMLGPusage(char *exeName)
     printf("\t--obj int \t(default = 0)\n");
     printf("\t\tDetermine the objective we are trying to minimize\n");
     printf("\t\t= 0 : minimize edge-cut\n");
-    printf("\t\t= 1 : minimize communication volume\n");
+    printf("\t\t= 1 : minimize communication volume (maximum edge weight per producer/destination part)\n");
+    printf("\t\tVolume uses original-graph refinement after an edge-cut seed; --ref_step limits passes.\n");
 
     //
     printf("\t--ignore_livesize (-0) int \t(default = 0)\n");
@@ -559,7 +560,9 @@ int processMLGPargs(int argc, char **argv, MLGP_option* opt)
                 opt->anchored = atoi(optarg);
                 break;
             case 'j':
-                opt->obj = atoi(optarg);
+                if (strcmp(optarg, "0") != 0 && strcmp(optarg, "1") != 0)
+                    u_errexit("--obj must be 0 (edge cut) or 1 (communication volume)\n");
+                opt->obj = optarg[0] - '0';
                 break;
             case '*':
                 opt->ccr = (double) atoi(optarg);
@@ -658,4 +661,3 @@ int processMLGPargs(int argc, char **argv, MLGP_option* opt)
         u_errexit("Initial partitioning %d only works with --conpar 1\n", IP_CONPAR);
     return 0;
 }
-

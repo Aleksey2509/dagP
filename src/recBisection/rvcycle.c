@@ -8,6 +8,7 @@
 #include "info.h"
 #include "dgraph.h"
 #include "undirPartitioning.h"
+#include "volumeRefinement.h"
 
 
 rcoarsen *initializeRCoarsen(coarsen* icoars)
@@ -344,6 +345,23 @@ void splitCoarsen(rcoarsen* rcoars, dgraph* G1, dgraph* G2, int* part1, int* par
 
 rcoarsen* rVCycle(dgraph *G, MLGP_option opt, rMLGP_info* info)
 {
+    if (opt.obj != CO_OBJ_EC && opt.obj != CO_OBJ_CV)
+        u_errexit("obj must be 0 (edge cut) or 1 (communication volume)\n");
+    if (opt.obj == CO_OBJ_CV) {
+        MLGP_option seed = opt;
+        seed.obj = CO_OBJ_EC;
+        rcoarsen *result = rVCycle(G, seed, info);
+        double start = u_wseconds();
+        ecType before = volume(G, result->coars->part, opt.nbPart);
+        ecType after = refineVolume(G, result->coars->part, &opt);
+        double elapsed = u_wseconds() - start;
+        info->timing_global += elapsed;
+        info->timing_uncoars += elapsed;
+        if (opt.print > 0)
+            printf("Communication volume refinement: %lld -> %lld (%.3f seconds)\n",
+                   (long long)before, (long long)after, elapsed);
+        return result;
+    }
     /*part is allocated and this function fills it*/
     info->timing_global -= u_wseconds();
     info->depth++;
@@ -540,4 +558,3 @@ rcoarsen* rVCycle(dgraph *G, MLGP_option opt, rMLGP_info* info)
 
     return rcoars;
 }
-

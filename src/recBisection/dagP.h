@@ -14,6 +14,8 @@ int dagP_read_graph(char* file_name, dgraph *G, const MLGP_option *opt);
 int dagP_init_filename(MLGP_option* opt, char* file_name);
 int dagP_init_parameters(MLGP_option *opt, const int nbPart);
 int dagP_opt_reallocUBLB(MLGP_option *opt, const int nbPart);
+/* Returns the best selected objective across runs: edge cut (obj=0) or
+ * communication volume (obj=1). Writes that run's assignment into parts. */
 ecType dagP_partition_from_dgraph(dgraph *G, const MLGP_option *opt, idxType* parts);
 int dagP_free_graph(dgraph* G);
 int dagP_free_option(MLGP_option *opt);
