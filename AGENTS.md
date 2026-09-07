@@ -4,6 +4,16 @@
 
 dagP is a mixed C/C++ directed acyclic graph partitioner. Core graph types, readers, traversal, clustering, and utilities live in `src/common/`. Recursive bisection and multilevel partitioning code lives in `src/recBisection/`; `rMLGP.c` provides the main CLI and `dagP.h` exposes the library API. `src/useapi.cpp` is a small integration example. Sample input graphs are stored in `data/`. SCons places generated executables in `exe/`, the static library in `lib/`, and object files in the build tree; do not commit these outputs.
 
+## Architecture & Code Documentation
+
+Start with [docs/README.md](docs/README.md) for an overview and reading order.
+
+- [docs/architecture.md](docs/architecture.md) maps source modules and entry points, explains graph storage and indexing, and describes execution flow and memory ownership.
+- [docs/algorithms.md](docs/algorithms.md) explains the edge-cut objective, balance and acyclicity constraints, recursive bisection, multilevel coarsening, initial partitioning, and refinement.
+- [docs/usage.md](docs/usage.md) covers build configuration, supported CLI options, graph formats, API integration, and implementation limitations.
+
+The guides describe baseline commit `333c3f2822cd300983c9ad71ed6c8961e4d11f1d`; check current source before assuming every detail still applies. For the main algorithm flow, follow `rVCycle` in `src/recBisection/rvcycle.c` into `VCycle2way` in `src/recBisection/vcycle2way.c`. Keep the recursive bisection tree distinct from the coarsening chain within each bisection.
+
 ## Build, Test, and Development Commands
 
 Install SCons, then create a local configuration before building:
