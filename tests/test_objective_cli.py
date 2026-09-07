@@ -5,6 +5,7 @@ import re
 import statistics
 import subprocess
 import tempfile
+import unittest
 
 
 EXE = Path(__file__).resolve().parents[1] / "exe/rMLGP"
@@ -153,4 +154,53 @@ with tempfile.TemporaryDirectory(prefix="dagp-objective-") as directory:
         assert float(re.search(r"Average Edgecut:([\d.]+)", output)[1]) == cut
         assert acyclic(large_edges, parts, 2)
 
-print("Objective CLI tests passed")
+class ObjectiveRegressions(unittest.TestCase):
+    def test_zero_cost_dependency(self):
+        # A feasible four-way DAG. Zero-cost edges still impose dependencies
+        # during seed generation, before the volume refiner is reached.
+        weights = [4, 1, 3, 4]
+        self.assertTrue(acyclic([(1, 3, 0)], [0, 1, 2, 3], 4))
+        self.assertLessEqual(max(weights), 1.5 * sum(weights) / 4)
+        with tempfile.TemporaryDirectory(prefix="dagp-zero-cost-") as directory:
+            root = Path(directory)
+            for cost in (1, 0):
+                graph = root / f"dependency-{cost}.dot"
+                edges = [(1, 3, cost)]
+                graph.write_text("digraph G {\n" + "".join(
+                    f"{v} [weight={w}];\n" for v, w in enumerate(weights, 1))
+                    + f"1 -> 3 [weight={cost}];\n" + "}\n")
+                for objective in (0, 1):
+                    with self.subTest(cost=cost, objective=objective):
+                        output = run(root, graph, 4, f"--obj={objective}",
+                                     "--seed=17", "--ratio=1.5",
+                                     "--use_binary_input=0", "--write_parts=1")
+                        assignment = Path(f"{graph}.partsfile.part_4.seed_17.txt")
+                        parts = list(map(int, assignment.read_text().split()))
+                        self.assertEqual(len(parts), 4)
+                        self.assertTrue(all(0 <= p < 4 for p in parts))
+                        self.assertTrue(acyclic(edges, parts, 4))
+                        cut, vol = metric(edges, parts)
+                        self.assertEqual(int(re.search(r"Edgecut: (\d+)", output)[1]), cut)
+                        self.assertEqual(int(re.search(
+                            r"Communication volume: (\d+)", output)[1]), vol)
+
+    def test_nonimproving_large_candidates(self):
+        # Python integers let us describe both sides of the ecType boundary
+        # without overflowing the test oracle itself. Every seed has volume
+        # zero, so a correct refiner must leave it unchanged in every mode.
+        max_cost = 2**63 - 1
+        unit_exe = EXE.with_name("test_objective")
+        with tempfile.TemporaryDirectory(prefix="dagp-large-candidate-") as directory:
+            for weight in (max_cost // 2, max_cost // 2 + 1,
+                           max_cost // 2 + 2, 5 * 10**18):
+                for refinement in (1, 2, 3, 4):
+                    with self.subTest(weight=weight, refinement=refinement,
+                                      candidate_cost=2 * weight):
+                        result = subprocess.run(
+                            [str(unit_exe), "--large-candidate", str(refinement), str(weight)],
+                            cwd=directory, capture_output=True, text=True, timeout=30)
+                        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()

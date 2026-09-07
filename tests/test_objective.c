@@ -200,6 +200,31 @@ static void testRandomRefinement(void)
     assert(swapsImproved > 0);
 }
 
+/* The seed has volume zero, so no strictly improving move or swap exists.
+ * A candidate can nevertheless cost 2 * weight, beyond ecType_MAX. Do not
+ * evaluate that candidate with the ecType reference accumulator: it would
+ * reproduce the implementation's overflow instead of detecting it. */
+static void testLargeCandidate(int refinement, ecType weight)
+{
+    edge edges[] = {{1,3,weight}, {2,3,weight}};
+    idxType part[] = {0,0,0,0,1};
+    const idxType original[] = {0,0,0,0,1};
+    dgraph G;
+    makeGraph(&G, 4, edges, 2, 1);
+    MLGP_option opt;
+    initMLGPoptions(&opt, 2);
+    opt.refinement = refinement;
+    opt.lb[0] = opt.lb[1] = 1;
+    opt.ub[0] = opt.ub[1] = 3;
+    assert(volume(&G, part, 2) == 0);
+    ecType after = refineVolume(&G, part, &opt);
+    assert(after == 0);
+    assert(memcmp(part, original, sizeof(part)) == 0);
+    assertAcyclic(edges, 2, part, 2);
+    free_opt(&opt);
+    freeGraph(&G);
+}
+
 static void testAPI(void)
 {
     edge edges[] = {{1,3,1}, {1,4,1}, {2,3,1}, {2,4,1},
@@ -244,6 +269,12 @@ static void testAPI(void)
 
 int main(int argc, char **argv)
 {
+    /* Run potentially aborting regressions separately so the Python runner
+     * reports every failing case rather than stopping at the first assert. */
+    if (argc == 4 && strcmp(argv[1], "--large-candidate") == 0) {
+        testLargeCandidate(atoi(argv[2]), strtoll(argv[3], NULL, 10));
+        return 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--invalid-objective") == 0) {
         MLGP_option opt = {0};
         dgraph G = {0};
